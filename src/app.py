@@ -59,7 +59,6 @@ def books_to_table(books):
     ]
 
 
-# 初始化 Session State（確保操作過程中資料結構狀態維持在記憶體）
 if "initialized" not in st.session_state:
     ht, trie, bst = load_platform()
     st.session_state.ht = ht
@@ -74,7 +73,6 @@ bst = st.session_state.bst
 st.title("📚 校園二手教科書交換平台")
 st.caption("底層引擎：手寫 Hash Table、Trie 字典樹、BST 二元搜尋樹、Min-Heap 優先佇列")
 
-# 側邊欄：快速統計與存檔
 with st.sidebar:
     st.header("📊 平台即時狀態")
     all_books = ht.get_all_books()
@@ -86,10 +84,9 @@ with st.sidebar:
         save_platform(ht)
         st.success("已成功寫回 data/books.csv！")
 
-# 分頁選單
 tab1, tab2, tab3, tab4 = st.tabs([
     "🔍 書籍搜尋 (Hash / Trie / BST)",
-    "➕ 上架新教科書",
+    "➕ 上架 / 🗑️ 下架書籍",
     "🔥 熱門預約排隊 (Min-Heap)",
     "⚡ 效能實測對比 (Benchmark)"
 ])
@@ -114,7 +111,7 @@ with tab1:
             st.dataframe(books_to_table(results), use_container_width=True, hide_index=True)
 
     elif mode.startswith("價格"):
-        min_p, max_p = st.slider("拖曳選擇價格區間 ($)：", 100, 1200, (250, 550), step=10)
+        min_p, max_p = st.slider("拖曳選擇價格區間 ($)：", 50, 1200, (250, 550), step=10)
         t0 = time.perf_counter()
         results = bst.range_search(min_p, max_p)
         elapsed = (time.perf_counter() - t0) * 1000
@@ -135,10 +132,10 @@ with tab1:
                 st.warning("查無此 ISBN 書籍。")
 
 # ==========================================
-# 分頁 2：上架新教科書
+# 分頁 2：上架與下架刪除書籍
 # ==========================================
 with tab2:
-    st.subheader("上架二手教科書（同步寫入 Hash Table、Trie 與 BST）")
+    st.subheader("➕ 上架二手教科書（同步寫入 Hash Table、Trie 與 BST）")
     with st.form("add_book_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -163,6 +160,21 @@ with tab2:
                 bst.insert(b)
                 save_platform(ht)
                 st.success(f"《{new_title}》上架成功並已存入資料庫！")
+                st.rerun()
+
+    st.divider()
+    st.subheader("🗑️ 下架 / 刪除書籍（同步移除三種資料結構節點）")
+    if all_books:
+        del_options = {f"[{b.isbn}] {b.title} (${b.price}) - 賣家:{b.seller}": b for b in all_books}
+        del_label = st.selectbox("選擇要下架刪除的書籍：", list(del_options.keys()), key="del_select")
+        if st.button("🗑️ 確認下架並永久刪除", type="primary"):
+            target = del_options[del_label]
+            ht.delete(target.isbn)
+            trie.delete(target)
+            bst.delete(target)
+            save_platform(ht)
+            st.success(f"已成功刪除《{target.title}》（ISBN: {target.isbn}）！")
+            st.rerun()
 
 # ==========================================
 # 分頁 3：Min-Heap 預約排隊與結單

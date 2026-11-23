@@ -22,7 +22,7 @@ class Book:
 
 
 # ==========================================
-# 1. Hash Table (Separate Chaining) -> ISBN 查詢 O(1)
+# 1. Hash Table (Separate Chaining) -> ISBN 查詢與刪除 O(1)
 # ==========================================
 class HashNode:
     def __init__(self, key, book):
@@ -66,6 +66,22 @@ class HashTable:
             curr = curr.next
         return None
 
+    def delete(self, isbn):
+        index = self._hash(isbn)
+        curr = self.buckets[index]
+        prev = None
+        while curr:
+            if curr.key == isbn:
+                if prev is None:
+                    self.buckets[index] = curr.next
+                else:
+                    prev.next = curr.next
+                self.count -= 1
+                return curr.book
+            prev = curr
+            curr = curr.next
+        return None
+
     def get_all_books(self):
         result = []
         for head in self.buckets:
@@ -77,7 +93,7 @@ class HashTable:
 
 
 # ==========================================
-# 2. Trie (Prefix Tree) -> 書名關鍵字前綴搜尋 O(L)
+# 2. Trie (Prefix Tree) -> 書名關鍵字前綴搜尋與刪除 O(L)
 # ==========================================
 class TrieNode:
     def __init__(self):
@@ -107,6 +123,16 @@ class BookTrie:
         self._dfs_collect(node, results)
         return results
 
+    def delete(self, book):
+        node = self.root
+        for ch in book.title.lower():
+            if ch not in node.children:
+                return False
+            node = node.children[ch]
+        original_len = len(node.books)
+        node.books = [b for b in node.books if b.isbn != book.isbn]
+        return len(node.books) < original_len
+
     def _dfs_collect(self, node, results):
         results.extend(node.books)
         for child in node.children.values():
@@ -114,7 +140,7 @@ class BookTrie:
 
 
 # ==========================================
-# 3. Binary Search Tree (BST) -> 價格區間篩選 O(log n)
+# 3. Binary Search Tree (BST) -> 價格區間篩選與節點刪除 O(log n)
 # ==========================================
 class BSTNode:
     def __init__(self, book):
@@ -148,6 +174,40 @@ class PriceBST:
             else:
                 self._insert_recursive(node.right, book)
 
+    def delete(self, book):
+        self.root = self._delete_recursive(self.root, book)
+
+    def _delete_recursive(self, node, book):
+        if not node:
+            return None
+        if book.price < node.price:
+            node.left = self._delete_recursive(node.left, book)
+        elif book.price > node.price:
+            node.right = self._delete_recursive(node.right, book)
+        else:
+            node.books = [b for b in node.books if b.isbn != book.isbn]
+            # 若該價格節點已無任何書籍，執行標準 BST 節點刪除
+            if not node.books:
+                if not node.left:
+                    return node.right
+                if not node.right:
+                    return node.left
+                # 尋找右子樹最小節點 (In-order Successor) 替換
+                successor = node.right
+                while successor.left:
+                    successor = successor.left
+                node.price = successor.price
+                node.books = successor.books
+                successor.books = []
+                node.right = self._remove_empty_min(node.right)
+        return node
+
+    def _remove_empty_min(self, node):
+        if not node.left:
+            return node.right
+        node.left = self._remove_empty_min(node.left)
+        return node
+
     def range_search(self, min_price, max_price):
         results = []
         self._inorder_range(self.root, min_price, max_price, results)
@@ -169,7 +229,6 @@ class PriceBST:
 # ==========================================
 class MinHeap:
     def __init__(self):
-        # 元素格式: (priority_key, timestamp, buyer_name, offer_price)
         self.heap = []
 
     def size(self):
